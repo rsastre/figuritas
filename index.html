@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Álbum Mundial 2026</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <h1>Usa Méx Can 26 ▾</h1>
+      <div class="stats-pill">
+        <span id="ownedCount">0</span>/<span id="totalCount">0</span>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-filter="all">Todas</button>
+      <button class="tab" data-filter="missing">Me faltan</button>
+      <button class="tab" data-filter="repeated">Repetidas</button>
+    </nav>
+
+    <section class="tools card">
+      <input id="searchInput" type="search" placeholder="Buscar sección o país" />
+      <button id="collapseBtn" class="ghost">Contraer todo</button>
+      <button id="expandBtn" class="ghost">Expandir todo</button>
+      <button id="resetBtn" class="danger">Reiniciar</button>
+    </section>
+
+    <section id="sectionsRoot" class="sections"></section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
