@@ -1,229 +1,166 @@
-const STORAGE_KEY = "figuritas_2026";
-const SYNC_URL_KEY = "figuritas_2026_sync_url";
+const STORAGE_KEY = "album_2026_tracker_v2";
 
-const state = {
-  owned: new Set(),
-  duplicateHits: 0,
-  syncUrl: "",
-};
+const specialSections = [
+  { code: "FWC-Especiales", label: "FWC - Especiales", stickers: ["00", "1", "2", "3", "4"] },
+  { code: "FWC-Balon", label: "FWC - Balón y Países", stickers: ["5", "6", "7", "8"] },
+  { code: "FWC-Historia", label: "FWC - Historia", stickers: Array.from({ length: 11 }, (_, i) => String(i + 9)) },
+];
+
+// Basado en listado de clasificados para 2026 (hosts + clasificados por confederación al cierre de qualy 2026).
+const qualifiedCountries = [
+  ["USA", "Estados Unidos"], ["CAN", "Canadá"], ["MEX", "México"], ["JPN", "Japón"],
+  ["NZL", "Nueva Zelanda"], ["IRN", "Irán"], ["ARG", "Argentina"], ["UZB", "Uzbekistán"],
+  ["KOR", "Corea del Sur"], ["JOR", "Jordania"], ["AUS", "Australia"], ["BRA", "Brasil"],
+  ["ECU", "Ecuador"], ["URY", "Uruguay"], ["COL", "Colombia"], ["PRY", "Paraguay"],
+  ["MAR", "Marruecos"], ["TUN", "Túnez"], ["EGY", "Egipto"], ["ALG", "Argelia"],
+  ["GHA", "Ghana"], ["CPV", "Cabo Verde"], ["QAT", "Qatar"], ["KSA", "Arabia Saudita"],
+  ["CIV", "Costa de Marfil"], ["SEN", "Senegal"], ["ZAF", "Sudáfrica"], ["ENG", "Inglaterra"],
+  ["FRA", "Francia"], ["HRV", "Croacia"], ["PRT", "Portugal"], ["NOR", "Noruega"],
+  ["DEU", "Alemania"], ["NLD", "Países Bajos"], ["CHE", "Suiza"], ["SCO", "Escocia"],
+  ["ESP", "España"], ["AUT", "Austria"], ["BEL", "Bélgica"], ["PAN", "Panamá"],
+  ["CUW", "Curazao"], ["HTI", "Haití"], ["BIH", "Bosnia y Herzegovina"], ["SWE", "Suecia"],
+  ["TUR", "Turquía"], ["CZE", "Chequia"], ["COD", "RD del Congo"], ["IRQ", "Irak"],
+];
+
+const countrySections = qualifiedCountries.map(([code, label]) => ({
+  code,
+  label: `${code} - ${label}`,
+  stickers: Array.from({ length: 20 }, (_, i) => String(i + 1)),
+}));
+
+const allSections = [...specialSections, ...countrySections];
+const model = Object.fromEntries(allSections.map((s) => [s.code, Object.fromEntries(s.stickers.map((n) => [n, { owned: false, repeated: 0 }]))]));
+
+const state = { filter: "all", query: "", collapsed: new Set() };
 
 const el = {
-  countOwned: document.getElementById("countOwned"),
-  countDupes: document.getElementById("countDupes"),
-  progressBar: document.getElementById("progressBar"),
-  progressText: document.getElementById("progressText"),
-  albumSize: document.getElementById("albumSize"),
-  stickerList: document.getElementById("stickerList"),
-  manualInput: document.getElementById("manualInput"),
-  addManualBtn: document.getElementById("addManualBtn"),
-  chatForm: document.getElementById("chatForm"),
-  chatInput: document.getElementById("chatInput"),
-  imageInput: document.getElementById("imageInput"),
-  chatLog: document.getElementById("chatLog"),
+  sectionsRoot: document.getElementById("sectionsRoot"),
+  searchInput: document.getElementById("searchInput"),
   resetBtn: document.getElementById("resetBtn"),
-  syncUrlInput: document.getElementById("syncUrlInput"),
-  connectSyncBtn: document.getElementById("connectSyncBtn"),
-  pullSyncBtn: document.getElementById("pullSyncBtn"),
-  pushSyncBtn: document.getElementById("pushSyncBtn"),
-  syncStatus: document.getElementById("syncStatus"),
+  ownedCount: document.getElementById("ownedCount"),
+  totalCount: document.getElementById("totalCount"),
+  collapseBtn: document.getElementById("collapseBtn"),
+  expandBtn: document.getElementById("expandBtn"),
+  tabs: [...document.querySelectorAll(".tab")],
 };
-
-function addMsg(kind, text) {
-  const div = document.createElement("div");
-  div.className = `msg ${kind}`;
-  div.textContent = text;
-  el.chatLog.appendChild(div);
-  el.chatLog.scrollTop = el.chatLog.scrollHeight;
-}
-
-function setSyncStatus(text) {
-  el.syncStatus.textContent = text;
-}
 
 function load() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    const parsed = JSON.parse(raw);
-    state.owned = new Set(parsed.owned || []);
-    state.duplicateHits = parsed.duplicateHits || 0;
-    if (parsed.albumSize) {
-      el.albumSize.value = parsed.albumSize;
-      el.progressBar.max = parsed.albumSize;
+  if (!raw) return;
+  const parsed = JSON.parse(raw);
+  for (const section of allSections) {
+    const src = parsed?.album?.[section.code] || {};
+    for (const key of section.stickers) {
+      if (src[key]) model[section.code][key] = src[key];
     }
   }
-
-  state.syncUrl = localStorage.getItem(SYNC_URL_KEY) || "";
-  el.syncUrlInput.value = state.syncUrl;
-  if (state.syncUrl) {
-    setSyncStatus("Sincronización remota configurada. Podés traer/subir estado compartido.");
-  }
 }
 
-function saveLocal() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    owned: [...state.owned],
-    duplicateHits: state.duplicateHits,
-    albumSize: Number(el.albumSize.value),
-  }));
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ album: model }));
 }
 
-function extractStickerNumbers(text) {
-  return [...new Set((text.match(/\d{1,4}/g) || []).map(Number).filter(n => n > 0))];
-}
-
-function serializeState() {
-  return {
-    owned: [...state.owned].sort((a, b) => a - b),
-    duplicateHits: state.duplicateHits,
-    albumSize: Number(el.albumSize.value),
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function applyState(next) {
-  state.owned = new Set(next.owned || []);
-  state.duplicateHits = Number(next.duplicateHits || 0);
-  if (next.albumSize) {
-    el.albumSize.value = Number(next.albumSize);
-  }
-  saveLocal();
-  render();
-}
-
-async function pushRemote() {
-  if (!state.syncUrl) throw new Error("No hay URL de sincronización configurada.");
-
-  const response = await fetch(state.syncUrl, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action: "save", payload: serializeState() }),
-  });
-
-  if (!response.ok) throw new Error(`Error remoto (${response.status})`);
-}
-
-async function pullRemote() {
-  if (!state.syncUrl) throw new Error("No hay URL de sincronización configurada.");
-
-  const response = await fetch(`${state.syncUrl}?action=load`, { method: "GET" });
-  if (!response.ok) throw new Error(`Error remoto (${response.status})`);
-
-  const data = await response.json();
-  if (!data?.payload) throw new Error("Respuesta remota inválida");
-
-  applyState(data.payload);
-}
-
-async function registerStickers(numbers, sourceLabel = "carga") {
-  let added = 0;
-  for (const n of numbers) {
-    if (state.owned.has(n)) state.duplicateHits += 1;
-    else {
-      state.owned.add(n);
-      added += 1;
+function totalStats() {
+  let owned = 0; let total = 0;
+  for (const s of allSections) {
+    for (const key of s.stickers) {
+      total += 1;
+      if (model[s.code][key].owned) owned += 1;
     }
   }
+  return { owned, total };
+}
 
-  saveLocal();
-  render();
-
-  if (state.syncUrl) {
-    try {
-      await pushRemote();
-      setSyncStatus(`Estado compartido sincronizado (${sourceLabel}).`);
-    } catch (err) {
-      setSyncStatus(`No pude sincronizar: ${err.message}`);
-    }
-  }
-
-  return added;
+function stickerVisible(info) {
+  if (state.filter === "missing") return !info.owned;
+  if (state.filter === "repeated") return info.repeated > 0;
+  return true;
 }
 
 function render() {
-  const owned = [...state.owned].sort((a, b) => a - b);
-  el.countOwned.textContent = owned.length;
-  el.countDupes.textContent = state.duplicateHits;
+  const { owned, total } = totalStats();
+  el.ownedCount.textContent = owned;
+  el.totalCount.textContent = total;
 
-  const albumSize = Number(el.albumSize.value) || 1;
-  el.progressBar.max = albumSize;
-  el.progressBar.value = owned.length;
-  el.progressText.textContent = `${Math.round((owned.length / albumSize) * 100)}% completado`;
+  const q = state.query.toLowerCase();
+  el.sectionsRoot.innerHTML = "";
 
-  el.stickerList.innerHTML = "";
-  for (const n of owned) {
-    const li = document.createElement("li");
-    li.textContent = `#${n}`;
-    el.stickerList.appendChild(li);
+  for (const section of allSections) {
+    if (q && !section.label.toLowerCase().includes(q)) continue;
+
+    const visibleStickers = section.stickers.filter((num) => stickerVisible(model[section.code][num]));
+    if (!visibleStickers.length) continue;
+
+    const wrapper = document.createElement("article");
+    wrapper.className = "section card";
+
+    const head = document.createElement("button");
+    head.className = "section-head";
+    head.innerHTML = `<strong>${section.label}</strong><span>${state.collapsed.has(section.code) ? "▾" : "▴"}</span>`;
+    head.onclick = () => {
+      if (state.collapsed.has(section.code)) state.collapsed.delete(section.code);
+      else state.collapsed.add(section.code);
+      render();
+    };
+    wrapper.appendChild(head);
+
+    if (!state.collapsed.has(section.code)) {
+      const grid = document.createElement("div");
+      grid.className = "sticker-grid";
+
+      for (const num of visibleStickers) {
+        const info = model[section.code][num];
+        const chip = document.createElement("div");
+        chip.className = `chip ${info.owned ? "owned" : ""}`;
+
+        const numberBtn = document.createElement("button");
+        numberBtn.className = "chip-number";
+        numberBtn.textContent = num;
+        numberBtn.onclick = () => {
+          info.owned = !info.owned;
+          if (!info.owned) info.repeated = 0;
+          save(); render();
+        };
+
+        const repeat = document.createElement("div");
+        repeat.className = "repeat-controls";
+        repeat.innerHTML = `<button>-</button><span>x${info.repeated}</span><button>+</button>`;
+        const [minus, , plus] = repeat.querySelectorAll("button, span, button");
+        minus.onclick = () => {
+          info.repeated = Math.max(0, info.repeated - 1);
+          if (info.repeated > 0) info.owned = true;
+          save(); render();
+        };
+        plus.onclick = () => {
+          info.repeated += 1;
+          info.owned = true;
+          save(); render();
+        };
+
+        chip.append(numberBtn, repeat);
+        grid.appendChild(chip);
+      }
+
+      wrapper.appendChild(grid);
+    }
+
+    el.sectionsRoot.appendChild(wrapper);
   }
 }
 
-el.addManualBtn.addEventListener("click", async () => {
-  const nums = extractStickerNumbers(el.manualInput.value);
-  const added = await registerStickers(nums, "carga manual");
-  el.manualInput.value = "";
-  addMsg("assistant", `Agregué ${added} nuevas. Revisé ${nums.length - added} duplicadas.`);
-});
+el.searchInput.addEventListener("input", () => { state.query = el.searchInput.value.trim(); render(); });
+el.resetBtn.addEventListener("click", () => { localStorage.removeItem(STORAGE_KEY); location.reload(); });
+el.collapseBtn.addEventListener("click", () => { state.collapsed = new Set(allSections.map((s) => s.code)); render(); });
+el.expandBtn.addEventListener("click", () => { state.collapsed.clear(); render(); });
 
-el.chatForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const text = el.chatInput.value.trim();
-  if (!text) return;
-
-  const image = el.imageInput.files[0];
-  addMsg("user", image ? `${text} (con imagen: ${image.name})` : text);
-
-  const numbers = extractStickerNumbers(text);
-  const added = await registerStickers(numbers, "chat IA");
-
-  addMsg("assistant", `Detecté ${numbers.length} números. Se sumaron ${added}; ${numbers.length - added} ya estaban.`);
-  el.chatInput.value = "";
-  el.imageInput.value = "";
-});
-
-el.connectSyncBtn.addEventListener("click", () => {
-  const url = el.syncUrlInput.value.trim();
-  state.syncUrl = url;
-  localStorage.setItem(SYNC_URL_KEY, url);
-  setSyncStatus(url ? "Conexión guardada. Usá 'Traer estado' para cargar el álbum compartido." : "Sin conexión remota.");
-});
-
-el.pullSyncBtn.addEventListener("click", async () => {
-  try {
-    await pullRemote();
-    setSyncStatus("Estado remoto cargado correctamente.");
-  } catch (err) {
-    setSyncStatus(`Error al traer estado: ${err.message}`);
-  }
-});
-
-el.pushSyncBtn.addEventListener("click", async () => {
-  try {
-    await pushRemote();
-    setSyncStatus("Estado remoto actualizado correctamente.");
-  } catch (err) {
-    setSyncStatus(`Error al subir estado: ${err.message}`);
-  }
-});
-
-el.albumSize.addEventListener("change", () => {
-  saveLocal();
-  render();
-});
-
-el.resetBtn.addEventListener("click", async () => {
-  localStorage.removeItem(STORAGE_KEY);
-  state.owned = new Set();
-  state.duplicateHits = 0;
-  render();
-  if (state.syncUrl) {
-    try {
-      await pushRemote();
-      setSyncStatus("Álbum reiniciado localmente y en remoto.");
-    } catch (err) {
-      setSyncStatus(`Álbum local reiniciado. Error remoto: ${err.message}`);
-    }
-  }
-});
+for (const tab of el.tabs) {
+  tab.addEventListener("click", () => {
+    el.tabs.forEach((t) => t.classList.remove("active"));
+    tab.classList.add("active");
+    state.filter = tab.dataset.filter;
+    render();
+  });
+}
 
 load();
 render();

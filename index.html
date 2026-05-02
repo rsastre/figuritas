@@ -7,62 +7,28 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="app">
-    <header class="hero card">
-      <div>
-        <h1>⚽ Álbum Mundial 2026</h1>
-        <p>Un solo álbum, entre amigos, sin duplicados y con asistente IA.</p>
+  <main class="app-shell">
+    <header class="topbar">
+      <h1>Usa Méx Can 26 ▾</h1>
+      <div class="stats-pill">
+        <span id="ownedCount">0</span>/<span id="totalCount">0</span>
       </div>
-      <button id="resetBtn" class="btn ghost">Reiniciar datos</button>
     </header>
 
-    <section class="grid">
-      <article class="card stats">
-        <h2>Progreso</h2>
-        <div class="kpis">
-          <div><span id="countOwned">0</span><small>Figuritas únicas</small></div>
-          <div><span id="countDupes">0</span><small>Duplicadas detectadas</small></div>
-        </div>
-        <div class="progress-wrap">
-          <label for="albumSize">Tamaño del álbum</label>
-          <input id="albumSize" type="number" min="1" value="670" />
-          <progress id="progressBar" max="670" value="0"></progress>
-          <p id="progressText">0%</p>
-        </div>
-      </article>
+    <nav class="tabs">
+      <button class="tab active" data-filter="all">Todas</button>
+      <button class="tab" data-filter="missing">Me faltan</button>
+      <button class="tab" data-filter="repeated">Repetidas</button>
+    </nav>
 
-      <article class="card chat">
-        <h2>Chat IA (imagen + texto)</h2>
-        <div id="chatLog" class="chat-log"></div>
-        <form id="chatForm" class="chat-form">
-          <input id="chatInput" type="text" placeholder="Ej: Encontramos 5, 18, 250 y 300" required />
-          <input id="imageInput" type="file" accept="image/*" />
-          <button class="btn" type="submit">Enviar</button>
-        </form>
-        <p class="hint">Demo local: hoy extrae números del texto. En producción, conectalo a GPT-5.5 con visión (ver README).</p>
-      </article>
-
-      <article class="card collection">
-        <h2>Registro de figuritas</h2>
-        <div class="toolbar">
-          <input id="manualInput" type="text" placeholder="Agregar manualmente: 12,34,56" />
-          <button id="addManualBtn" class="btn">Agregar</button>
-        </div>
-
-        <div class="sync-box">
-          <h3>Sincronización compartida (Google Sheets)</h3>
-          <input id="syncUrlInput" type="url" placeholder="Pegá acá tu URL de Apps Script Web App" />
-          <div class="toolbar">
-            <button id="connectSyncBtn" class="btn">Conectar</button>
-            <button id="pullSyncBtn" class="btn ghost">Traer estado</button>
-            <button id="pushSyncBtn" class="btn ghost">Subir estado</button>
-          </div>
-          <p id="syncStatus" class="hint">Sin conexión remota. Estado local únicamente.</p>
-        </div>
-
-        <ul id="stickerList" class="sticker-list"></ul>
-      </article>
+    <section class="tools card">
+      <input id="searchInput" type="search" placeholder="Buscar sección o país" />
+      <button id="collapseBtn" class="ghost">Contraer todo</button>
+      <button id="expandBtn" class="ghost">Expandir todo</button>
+      <button id="resetBtn" class="danger">Reiniciar</button>
     </section>
+
+    <section id="sectionsRoot" class="sections"></section>
   </main>
 
   <script type="module" src="app.js"></script>
